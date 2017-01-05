@@ -129,9 +129,7 @@ public class MaskPageOutput implements PageOutput {
     private String mask(String value, String pattern) {
         String maskedValue;
         if (pattern.equals("email")) {
-            Pattern regexPattern = Pattern.compile("^.+?@(.+)$");
-            Matcher matcher = regexPattern.matcher(value);
-            maskedValue = matcher.replaceFirst("*****@$1");
+            maskedValue = value.replaceAll(".(?=[^@]*@)", "*");
         } else if (pattern.equals("all")) {
             maskedValue = value.replaceAll(".", "*");
         } else {
