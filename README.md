@@ -11,7 +11,10 @@ mask columns with asterisks (still in initial development phase and missing basi
 - **columns**: target columns which would be replaced with asterisks (string, required)
   - **name**: name of the column (string, required)
   - **pattern**: mask pattern, `all` or `email` (string, default: `all`)
-  - **path**: JSON path, works if the column type is JSON (string, default: `$.`)
+  - **paths**: list of JSON path and pattern, works if the column type is JSON
+    - `[{key: $.json_path1}, {key: $.json_path2}]` would mask both `$.json_path1` and `$.json_path2` nodes
+    - Elements under the nodes would be converted to string and then masked (e.g., `[0,1,2]` -> `*******`)
+  - **length**: if specified, this filter replaces the column with fixed number of asterisks (integer, optional)
 
 ## Example
 
@@ -33,7 +36,7 @@ filters:
     columns:
       - { name: last_name}
       - { name: age}
-      - { name: contact, pattern: email}
+      - { name: contact, pattern: email, length: 5}
 ```
 
 would produce
@@ -57,7 +60,8 @@ If you have
     "last_name": "Bell"
   },
   "gender": "male",
-  "age": 30
+  "age": 30,
+  "email": "test_mail@example.com"
 }
 ```
 
@@ -67,8 +71,7 @@ below filter configuration
 filters:
   - type: mask
     columns:
-      - { name: full_name, path: $.first_name}
-      - { name: age, path: $.}      
+      - { name: full_name, paths: [{key: $.full_name.first_name}, {key: $.email, pattern: email}]}    
 ```
 
 would produce
@@ -80,7 +83,8 @@ would produce
     "last_name": "Bell"
   },
   "gender": "male",
-  "age": **
+  "age": 30,
+  "email": "*********@example.com"
 }
 ```
 
