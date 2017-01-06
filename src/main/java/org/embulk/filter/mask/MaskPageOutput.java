@@ -1,10 +1,8 @@
 package org.embulk.filter.mask;
 
 import com.fasterxml.jackson.databind.node.TextNode;
-import com.jayway.jsonpath.Configuration;
-import com.jayway.jsonpath.JsonPath;
-import com.jayway.jsonpath.Option;
-import com.jayway.jsonpath.ParseContext;
+import com.jayway.jsonpath.*;
+import org.apache.commons.lang3.StringUtils;
 import org.embulk.config.TaskSource;
 import org.embulk.spi.*;
 import org.embulk.spi.json.JsonParser;
@@ -14,6 +12,7 @@ import org.embulk.filter.mask.MaskFilterPlugin.*;
 import org.msgpack.value.Value;
 import org.slf4j.Logger;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -99,17 +98,27 @@ public class MaskPageOutput implements PageOutput {
 
             if (maskColumnMap.containsKey(inputColumn.getName())) {
                 MaskColumn maskColumn = maskColumnMap.get(inputColumn.getName());
-                String targetValue = inputValue.toString();
-                String pattern = maskColumn.getPattern().get();
 
                 if (Types.JSON.equals(inputColumn.getType())) {
-                    String path = maskColumn.getPath().get();
-                    String element = parseContext.parse(targetValue).read(path);
-                    String maskedValue = mask(element, pattern);
-                    String maskedJson = parseContext.parse(targetValue).set(path, new TextNode(maskedValue).asText()).jsonString();
-                    builder.setJson(inputColumn, jsonParser.parse(maskedJson));
+                    Value inputJson = (Value) inputValue;
+                    DocumentContext context = parseContext.parse(inputJson.toJson());
+                    List<Map<String, String>> paths = maskColumn.getPaths().or(new ArrayList<Map<String, String>>());
+
+                    for (Map<String, String> path : paths) {
+                        String key = path.get("key");
+                        String pattern = path.containsKey("pattern") ? path.get("pattern") : "all";
+                        int maskLength = path.containsKey("length") ? Integer.parseInt(path.get("length")) : 0;
+                        Object element = context.read(key);
+                        if (!key.equals("$") && element != null) {
+                            String maskedValue = mask(element, pattern, maskLength);
+                            String maskedJson = context.set(key, new TextNode(maskedValue).asText()).jsonString();
+                            builder.setJson(inputColumn, jsonParser.parse(maskedJson));
+                        }
+                    }
                 } else {
-                    String maskedString = mask(targetValue, pattern);
+                    String pattern = maskColumn.getPattern().get();
+                    int maskLength = maskColumn.getLength().or(0);
+                    String maskedString = mask(inputValue, pattern, maskLength);
                     builder.setString(inputColumn, maskedString);
                 }
             }
@@ -126,16 +135,24 @@ public class MaskPageOutput implements PageOutput {
         builder.close();
     }
 
-    private String mask(String value, String pattern) {
+    private String mask(Object value, String pattern, Integer length) {
         String maskedValue;
+        String nakedValue = value.toString();
         if (pattern.equals("email")) {
-            Pattern regexPattern = Pattern.compile("^.+?@(.+)$");
-            Matcher matcher = regexPattern.matcher(value);
-            maskedValue = matcher.replaceFirst("*****@$1");
+            if (length > 0) {
+                String maskPattern = StringUtils.repeat("*", length) + "@$1";
+                maskedValue = nakedValue.replaceFirst("^.+?@(.+)$", maskPattern);
+            } else {
+                maskedValue = nakedValue.replaceAll(".(?=[^@]*@)", "*");
+            }
         } else if (pattern.equals("all")) {
-            maskedValue = value.replaceAll(".", "*");
+            if (length > 0) {
+                maskedValue = StringUtils.repeat("*", length);
+            } else {
+                maskedValue = nakedValue.replaceAll(".", "*");
+            }
         } else {
-            maskedValue = value;
+            maskedValue = nakedValue;
         }
         return maskedValue;
     }
