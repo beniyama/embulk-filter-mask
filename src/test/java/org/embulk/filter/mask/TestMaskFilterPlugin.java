@@ -1,5 +1,8 @@
 package org.embulk.filter.mask;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableMap;
 import org.embulk.EmbulkTestRuntime;
 import org.embulk.config.ConfigException;
@@ -31,23 +34,19 @@ public class TestMaskFilterPlugin {
     @Rule
     public ExpectedException exception = ExpectedException.none();
 
-    private static Value s(String value)
-    {
+    private static Value s(String value) {
         return newString(value);
     }
 
-    private static Value i(int value)
-    {
+    private static Value i(int value) {
         return newInteger(value);
     }
 
-    private static Value f(double value)
-    {
+    private static Value f(double value) {
         return newFloat(value);
     }
 
-    private static Value b(boolean value)
-    {
+    private static Value b(boolean value) {
         return newBoolean(value);
     }
 
@@ -67,7 +66,7 @@ public class TestMaskFilterPlugin {
     private String getMaskedEmail(String email) {
         String maskedValue = "";
         for (int i = 0; i < email.length(); i++) {
-            if(email.charAt(i) == '@') {
+            if (email.charAt(i) == '@') {
                 maskedValue += email.substring(i);
                 break;
             }
@@ -252,6 +251,69 @@ public class TestMaskFilterPlugin {
                 assertEquals(getMaskedCharacters(c2ColumnValue), record[2]);
                 assertEquals(getMaskedCharacters(c3ColumnValue), record[3]);
                 assertEquals(getMaskedCharacters(c4ColumnValue), record[4]);
+            }
+        });
+    }
+
+    @Test
+    public void testMaskJson() {
+        String configYaml = "" +
+                "type: mask\n" +
+                "columns:\n" +
+                "  - { name: _c0}\n" +
+                "  - { name: _c1, paths: [{key: $.root.key1}]}\n" +
+                "  - { name: _c2, paths: [{key: $.root.key3, length: 2}, {key: $.root.key4, pattern: all}]}\n" +
+                "  - { name: _c3, paths: [{key: $.root.key1}, {key: $.root.key3.key7, pattern: email, length: 3}]}\n";
+
+        ConfigSource config = getConfigFromYaml(configYaml);
+
+        final Schema inputSchema = Schema.builder()
+                .add("_c0", JSON)
+                .add("_c1", JSON)
+                .add("_c2", JSON)
+                .add("_c3", JSON)
+                .build();
+
+        final MaskFilterPlugin maskFilterPlugin = new MaskFilterPlugin();
+        maskFilterPlugin.transaction(config, inputSchema, new Control() {
+            @Override
+            public void run(TaskSource taskSource, Schema outputSchema) {
+                final Value jsonValue = newMapBuilder().put(
+                        s("root"),
+                        newMap(
+                                s("key1"), s("value1"),
+                                s("key2"), i(2),
+                                s("key3"), newMap(
+                                        s("key5"), s("value5"),
+                                        s("key6"), newArray(i(0), i(1), i(2), i(3), i(4)),
+                                        s("key7"), s("testme@example.com")
+                                ),
+                                s("key4"), newArray(i(0), i(1), i(2), i(3), i(4))
+                        )
+                ).build();
+
+                MockPageOutput mockPageOutput = new MockPageOutput();
+                try (PageOutput pageOutput = maskFilterPlugin.open(taskSource, inputSchema, outputSchema, mockPageOutput)) {
+                    for (Page page : PageTestUtils.buildPage(runtime.getBufferAllocator(), inputSchema,
+                            jsonValue,
+                            jsonValue,
+                            jsonValue,
+                            jsonValue
+                    )) {
+                        pageOutput.add(page);
+                    }
+                    pageOutput.finish();
+                }
+                List<Object[]> records = Pages.toObjects(outputSchema, mockPageOutput.pages);
+
+                assertEquals(1, records.size());
+                Object[] record = records.get(0);
+
+                assertEquals(4, record.length);
+                assertEquals("{\"root\":{\"key1\":\"value1\",\"key2\":2,\"key3\":{\"key5\":\"value5\",\"key6\":[0,1,2,3,4],\"key7\":\"testme@example.com\"},\"key4\":[0,1,2,3,4]}}", record[0].toString());
+                assertEquals("{\"root\":{\"key1\":\"******\",\"key2\":2,\"key3\":{\"key5\":\"value5\",\"key6\":[0,1,2,3,4],\"key7\":\"testme@example.com\"},\"key4\":[0,1,2,3,4]}}", record[1].toString());
+                assertEquals("{\"root\":{\"key1\":\"value1\",\"key2\":2,\"key3\":\"**\",\"key4\":\"***********\"}}", record[2].toString());
+                assertEquals("{\"root\":{\"key1\":\"******\",\"key2\":2,\"key3\":{\"key5\":\"value5\",\"key6\":[0,1,2,3,4],\"key7\":\"***@example.com\"},\"key4\":[0,1,2,3,4]}}", record[3].toString());
             }
         });
     }

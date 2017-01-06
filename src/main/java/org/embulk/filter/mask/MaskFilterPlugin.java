@@ -37,9 +37,13 @@ public class MaskFilterPlugin implements FilterPlugin {
         @ConfigDefault("\"all\"")
         Optional<String> getPattern();
 
-        @Config("path")
-        @ConfigDefault("\"$.\"")
-        Optional<String> getPath();
+        @Config("length")
+        @ConfigDefault("null")
+        Optional<Integer> getLength();
+
+        @Config("paths")
+        @ConfigDefault("null")
+        Optional<List<Map<String, String>>> getPaths();
     }
 
     @Override
