@@ -51,7 +51,7 @@ would produce
 
 JSON type column is also partially supported.
 
-If you have
+If you have a `user` column with this JSON data structure
 
 ```json
 {
@@ -71,7 +71,7 @@ below filter configuration
 filters:
   - type: mask
     columns:
-      - { name: full_name, paths: [{key: $.full_name.first_name}, {key: $.email, pattern: email}]}    
+      - { name: user, paths: [{key: $.full_name.first_name}, {key: $.email, pattern: email}]}    
 ```
 
 would produce
