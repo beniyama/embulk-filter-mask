@@ -19,11 +19,11 @@ sourceCompatibility = 1.7
 targetCompatibility = 1.7
 
 dependencies {
-    compile  "org.embulk:embulk-core:0.8.15"
-    provided "org.embulk:embulk-core:0.8.15"
+    compile  "org.embulk:embulk-core:0.8.29"
+    provided "org.embulk:embulk-core:0.8.29"
     compile "com.jayway.jsonpath:json-path:2.+"
     testCompile "junit:junit:4.+"
-    testCompile "org.embulk:embulk-core:0.8.15:tests"
+    testCompile "org.embulk:embulk-core:0.8.29:tests"
 }
 
 task classpath(type: Copy, dependsOn: ["jar"]) {
