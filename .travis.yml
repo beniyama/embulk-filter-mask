@@ -1,7 +1,10 @@
 language: java
 jdk:
-  - openjdk7
-  - oraclejdk7
+# Tentatively ignore these environments as we face SSL errors
+# https://github.com/gradle/gradle/issues/2421
+#
+#  - openjdk7
+#  - oraclejdk7
   - oraclejdk8
 script:
   - ./gradlew test
