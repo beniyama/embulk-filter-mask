@@ -3,6 +3,7 @@ plugins {
     id "com.github.jruby-gradle.base" version "0.1.5"
     id "java"
     id "checkstyle"
+    id "jacoco"
 }
 import com.github.jrubygradle.JRubyExec
 repositories {
