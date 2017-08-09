@@ -1,5 +1,7 @@
 # Mask filter plugin for Embulk
 
+[![Coverage Status](https://coveralls.io/repos/github/beniyama/embulk-filter-mask/badge.svg)](https://coveralls.io/github/beniyama/embulk-filter-mask)
+
 Mask columns with asterisks in a variety of patterns (still in initial development phase and missing basic features to use in production).
 
 ## Overview
@@ -56,7 +58,7 @@ would produce
 | Christian | **** | male | ** | *****@example.com |
 | Amy |	***** | female | ** | *****@example.com |
 
-If you use `regex` or `substring` types,
+If you use `regex` and/or `substring` types,
 
 ```yaml
 filters:
