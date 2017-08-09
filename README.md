@@ -10,8 +10,8 @@ mask columns with asterisks (still in initial development phase and missing basi
 
 - **columns**: target columns which would be replaced with asterisks (string, required)
   - **name**: name of the column (string, required)
-  - **pattern**: mask pattern, `all` or `email` (string, default: `all`)
-  - **paths**: list of JSON path and pattern, works if the column type is JSON
+  - **type**: mask type, `all` or `email` (string, default: `all`)
+  - **paths**: list of JSON path and type, works if the column type is JSON
     - `[{key: $.json_path1}, {key: $.json_path2}]` would mask both `$.json_path1` and `$.json_path2` nodes
     - Elements under the nodes would be converted to string and then masked (e.g., `[0,1,2]` -> `*******`)
   - **length**: if specified, this filter replaces the column with fixed number of asterisks (integer, optional)
@@ -36,7 +36,7 @@ filters:
     columns:
       - { name: last_name}
       - { name: age}
-      - { name: contact, pattern: email, length: 5}
+      - { name: contact, type: email, length: 5}
 ```
 
 would produce
@@ -71,7 +71,7 @@ below filter configuration
 filters:
   - type: mask
     columns:
-      - { name: user, paths: [{key: $.full_name.first_name}, {key: $.email, pattern: email}]}    
+      - { name: user, paths: [{key: $.full_name.first_name}, {key: $.email, type: email}]}    
 ```
 
 would produce

@@ -262,8 +262,8 @@ public class TestMaskFilterPlugin {
                 "columns:\n" +
                 "  - { name: _c0}\n" +
                 "  - { name: _c1, paths: [{key: $.root.key1}]}\n" +
-                "  - { name: _c2, paths: [{key: $.root.key3, length: 2}, {key: $.root.key4, pattern: all}]}\n" +
-                "  - { name: _c3, paths: [{key: $.root.key1}, {key: $.root.key3.key7, pattern: email, length: 3}]}\n";
+                "  - { name: _c2, paths: [{key: $.root.key3, length: 2}, {key: $.root.key4, type: all}]}\n" +
+                "  - { name: _c3, paths: [{key: $.root.key1}, {key: $.root.key3.key7, type: email, length: 3}]}\n";
 
         ConfigSource config = getConfigFromYaml(configYaml);
 
@@ -323,9 +323,9 @@ public class TestMaskFilterPlugin {
         String configYaml = "" +
                 "type: mask\n" +
                 "columns:\n" +
-                "  - { name: _c0, pattern: email}\n" +
-                "  - { name: _c1, pattern: email}\n" +
-                "  - { name: _c2, pattern: all}\n" +
+                "  - { name: _c0, type: email}\n" +
+                "  - { name: _c1, type: email}\n" +
+                "  - { name: _c2, type: all}\n" +
                 "  - { name: _c3}\n";
 
         ConfigSource config = getConfigFromYaml(configYaml);

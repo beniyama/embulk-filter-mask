@@ -121,9 +121,9 @@ public class MaskPageOutput implements PageOutput {
 
     private String maskAsString(String name, Object value) {
         MaskColumn maskColumn = maskColumnMap.get(name);
-        String pattern = maskColumn.getPattern().get();
+        String type = maskColumn.getType().get();
         int maskLength = maskColumn.getLength().or(0);
-        return mask(value, pattern, maskLength);
+        return mask(value, type, maskLength);
     }
 
     private Value maskAsJson(String name, Value value) {
@@ -133,11 +133,11 @@ public class MaskPageOutput implements PageOutput {
 
         for (Map<String, String> path : paths) {
             String key = path.get("key");
-            String pattern = path.containsKey("pattern") ? path.get("pattern") : "all";
+            String type = path.containsKey("type") ? path.get("type") : "all";
             int maskLength = path.containsKey("length") ? Integer.parseInt(path.get("length")) : 0;
             Object element = context.read(key);
             if (!key.equals("$") && element != null) {
-                String maskedValue = mask(element, pattern, maskLength);
+                String maskedValue = mask(element, type, maskLength);
                 context.set(key, new TextNode(maskedValue).asText()).jsonString();
             }
         }
@@ -154,17 +154,17 @@ public class MaskPageOutput implements PageOutput {
         builder.close();
     }
 
-    private String mask(Object value, String pattern, Integer length) {
+    private String mask(Object value, String type, Integer length) {
         String maskedValue;
         String nakedValue = value.toString();
-        if (pattern.equals("email")) {
+        if (type.equals("email")) {
             if (length > 0) {
                 String maskPattern = StringUtils.repeat("*", length) + "@$1";
                 maskedValue = nakedValue.replaceFirst("^.+?@(.+)$", maskPattern);
             } else {
                 maskedValue = nakedValue.replaceAll(".(?=[^@]*@)", "*");
             }
-        } else if (pattern.equals("all")) {
+        } else if (type.equals("all")) {
             if (length > 0) {
                 maskedValue = StringUtils.repeat("*", length);
             } else {

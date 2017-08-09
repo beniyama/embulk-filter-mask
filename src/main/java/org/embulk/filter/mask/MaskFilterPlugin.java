@@ -30,12 +30,8 @@ public class MaskFilterPlugin implements FilterPlugin {
         String getName();
 
         @Config("type")
-        @ConfigDefault("\"string\"")
-        Optional<String> getType();
-
-        @Config("pattern")
         @ConfigDefault("\"all\"")
-        Optional<String> getPattern();
+        Optional<String> getType();
 
         @Config("length")
         @ConfigDefault("null")
