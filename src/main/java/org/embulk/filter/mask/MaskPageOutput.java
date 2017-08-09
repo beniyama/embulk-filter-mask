@@ -7,6 +7,7 @@ import org.embulk.config.TaskSource;
 import org.embulk.spi.*;
 import org.embulk.spi.json.JsonParser;
 import org.embulk.spi.time.Timestamp;
+import org.embulk.spi.type.Type;
 import org.embulk.spi.type.Types;
 import org.embulk.filter.mask.MaskFilterPlugin.*;
 import org.msgpack.value.Value;
@@ -67,62 +68,87 @@ public class MaskPageOutput implements PageOutput {
                 continue;
             }
 
-            Object inputValue;
-            if (Types.STRING.equals(inputColumn.getType())) {
+            String name = inputColumn.getName();
+            Type type = inputColumn.getType();
+
+            if (Types.STRING.equals(type)) {
                 final String value = reader.getString(inputColumn);
-                inputValue = value;
-                builder.setString(inputColumn, value);
-            } else if (Types.BOOLEAN.equals(inputColumn.getType())) {
-                final boolean value = reader.getBoolean(inputColumn);
-                inputValue = value;
-                builder.setBoolean(inputColumn, value);
-            } else if (Types.DOUBLE.equals(inputColumn.getType())) {
-                final double value = reader.getDouble(inputColumn);
-                inputValue = value;
-                builder.setDouble(inputColumn, value);
-            } else if (Types.LONG.equals(inputColumn.getType())) {
-                final long value = reader.getLong(inputColumn);
-                inputValue = value;
-                builder.setLong(inputColumn, value);
-            } else if (Types.TIMESTAMP.equals(inputColumn.getType())) {
-                final Timestamp value = reader.getTimestamp(inputColumn);
-                inputValue = value;
-                builder.setTimestamp(inputColumn, value);
-            } else if (Types.JSON.equals(inputColumn.getType())) {
-                final Value value = reader.getJson(inputColumn);
-                inputValue = value;
-                builder.setJson(inputColumn, value);
-            } else {
-                throw new DataException("Unexpected type:" + inputColumn.getType());
-            }
-
-            if (maskColumnMap.containsKey(inputColumn.getName())) {
-                MaskColumn maskColumn = maskColumnMap.get(inputColumn.getName());
-
-                if (Types.JSON.equals(inputColumn.getType())) {
-                    Value inputJson = (Value) inputValue;
-                    DocumentContext context = parseContext.parse(inputJson.toJson());
-                    List<Map<String, String>> paths = maskColumn.getPaths().or(new ArrayList<Map<String, String>>());
-
-                    for (Map<String, String> path : paths) {
-                        String key = path.get("key");
-                        String pattern = path.containsKey("pattern") ? path.get("pattern") : "all";
-                        int maskLength = path.containsKey("length") ? Integer.parseInt(path.get("length")) : 0;
-                        Object element = context.read(key);
-                        if (!key.equals("$") && element != null) {
-                            String maskedValue = mask(element, pattern, maskLength);
-                            String maskedJson = context.set(key, new TextNode(maskedValue).asText()).jsonString();
-                            builder.setJson(inputColumn, jsonParser.parse(maskedJson));
-                        }
-                    }
+                if (maskColumnMap.containsKey(name)) {
+                    builder.setString(inputColumn, maskAsString(name, value));
                 } else {
-                    String pattern = maskColumn.getPattern().get();
-                    int maskLength = maskColumn.getLength().or(0);
-                    String maskedString = mask(inputValue, pattern, maskLength);
-                    builder.setString(inputColumn, maskedString);
+                    builder.setString(inputColumn, value);
                 }
+            } else if (Types.BOOLEAN.equals(type)) {
+                final boolean value = reader.getBoolean(inputColumn);
+                if (maskColumnMap.containsKey(name)) {
+                    builder.setString(inputColumn, maskAsString(name, value));
+                } else {
+                    builder.setBoolean(inputColumn, value);
+                }
+            } else if (Types.DOUBLE.equals(type)) {
+                final double value = reader.getDouble(inputColumn);
+                if (maskColumnMap.containsKey(name)) {
+                    builder.setString(inputColumn, maskAsString(name, value));
+                } else {
+                    builder.setDouble(inputColumn, value);
+                }
+            } else if (Types.LONG.equals(type)) {
+                final long value = reader.getLong(inputColumn);
+                if (maskColumnMap.containsKey(name)) {
+                    builder.setString(inputColumn, maskAsString(name, value));
+                } else {
+                    builder.setLong(inputColumn, value);
+                }
+            } else if (Types.TIMESTAMP.equals(type)) {
+                final Timestamp value = reader.getTimestamp(inputColumn);
+                if (maskColumnMap.containsKey(name)) {
+                    builder.setString(inputColumn, maskAsString(name, value));
+                } else {
+                    builder.setTimestamp(inputColumn, value);
+                }
+            } else if (Types.JSON.equals(type)) {
+                final Value value = reader.getJson(inputColumn);
+                if (maskColumnMap.containsKey(name)) {
+                    builder.setJson(inputColumn, maskAsJson(name, value));
+                } else {
+                    builder.setJson(inputColumn, value);
+                }
+            } else {
+                throw new DataException("Unexpected type:" + type);
             }
         }
+    }
+
+    private String maskAsString(String name, Object value) {
+        MaskColumn maskColumn = maskColumnMap.get(name);
+        String type = maskColumn.getType().get();
+        String pattern = maskColumn.getPattern().or("");
+        Integer length = maskColumn.getLength().or(-1);
+        Integer start = maskColumn.getStart().or(-1);
+        Integer end = maskColumn.getEnd().or(-1);
+
+        return mask(type, value, pattern, length, start, end);
+    }
+
+    private Value maskAsJson(String name, Value value) {
+        MaskColumn maskColumn = maskColumnMap.get(name);
+        DocumentContext context = parseContext.parse(value.toJson());
+        List<Map<String, String>> paths = maskColumn.getPaths().or(new ArrayList<Map<String, String>>());
+
+        for (Map<String, String> path : paths) {
+            String key = path.get("key");
+            String type = path.containsKey("type") ? path.get("type") : "all";
+            String pattern = path.containsKey("pattern") ? path.get("pattern") : "";
+            Integer length = path.containsKey("length") ? Integer.parseInt(path.get("length")) : -1;
+            Integer start = path.containsKey("start") ? Integer.parseInt(path.get("start")) : -1;
+            Integer end = path.containsKey("end") ? Integer.parseInt(path.get("end")) : -1;
+            Object element = context.read(key);
+            if (!key.equals("$") && element != null) {
+                String maskedValue = mask(type, element, pattern, length, start, end);
+                context.set(key, new TextNode(maskedValue).asText()).jsonString();
+            }
+        }
+        return jsonParser.parse(context.jsonString());
     }
 
     @Override
@@ -135,25 +161,61 @@ public class MaskPageOutput implements PageOutput {
         builder.close();
     }
 
-    private String mask(Object value, String pattern, Integer length) {
+    private String mask(String type, Object value, String pattern, Integer length, Integer start, Integer end) {
         String maskedValue;
         String nakedValue = value.toString();
-        if (pattern.equals("email")) {
-            if (length > 0) {
-                String maskPattern = StringUtils.repeat("*", length) + "@$1";
-                maskedValue = nakedValue.replaceFirst("^.+?@(.+)$", maskPattern);
-            } else {
-                maskedValue = nakedValue.replaceAll(".(?=[^@]*@)", "*");
-            }
-        } else if (pattern.equals("all")) {
-            if (length > 0) {
-                maskedValue = StringUtils.repeat("*", length);
-            } else {
-                maskedValue = nakedValue.replaceAll(".", "*");
-            }
+        if (type.equals("regex")) {
+            maskedValue = maskRegex(nakedValue, pattern);
+        } else if (type.equals("substring")) {
+            maskedValue = maskSubstring(nakedValue, start, end, length);
+        } else if (type.equals("email")) {
+            maskedValue = maskEmail(nakedValue, length);
+        } else if (type.equals("all")) {
+            maskedValue = maskAll(nakedValue, length);
         } else {
             maskedValue = nakedValue;
         }
         return maskedValue;
+    }
+
+    private String maskAll(Object value, Integer length) {
+        String maskedValue;
+        String nakedValue = value.toString();
+        if (length > 0) {
+            maskedValue = StringUtils.repeat("*", length);
+        } else {
+            maskedValue = nakedValue.replaceAll(".", "*");
+        }
+        return maskedValue;
+    }
+
+    private String maskEmail(Object value, Integer length) {
+        String maskedValue;
+        String nakedValue = value.toString();
+        if (length > 0) {
+            String maskPattern = StringUtils.repeat("*", length) + "@$1";
+            maskedValue = nakedValue.replaceFirst("^.+?@(.+)$", maskPattern);
+        } else {
+            maskedValue = nakedValue.replaceAll(".(?=[^@]*@)", "*");
+        }
+        return maskedValue;
+    }
+
+    private String maskRegex(Object value, String pattern) {
+        String nakedValue = value.toString();
+        return nakedValue.replaceAll(pattern, "*");
+    }
+
+    private String maskSubstring(Object value, Integer start, Integer end, Integer length) {
+        String nakedValue = value.toString();
+
+        if (nakedValue.length() <= start || (0 <= end && (end - 1) <= start)) return nakedValue;
+
+        start = start < 0 ? 0 : start;
+        end = (end < 0 || nakedValue.length() <= end) ? nakedValue.length() : end;
+        int repeat = length > 0 ? length : end - start;
+
+        StringBuffer buffer = new StringBuffer(nakedValue);
+        return buffer.replace(start, end, StringUtils.repeat("*", repeat)).toString();
     }
 }

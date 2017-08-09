@@ -1,0 +1,12 @@
+language: java
+jdk:
+# Tentatively ignore these environments as we face SSL errors
+# https://github.com/gradle/gradle/issues/2421
+#
+#  - openjdk7
+#  - oraclejdk7
+  - oraclejdk8
+script:
+  - ./gradlew test
+after_success:
+  - ./gradlew jacocoTestReport coveralls

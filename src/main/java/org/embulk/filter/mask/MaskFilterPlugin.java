@@ -30,7 +30,7 @@ public class MaskFilterPlugin implements FilterPlugin {
         String getName();
 
         @Config("type")
-        @ConfigDefault("\"string\"")
+        @ConfigDefault("\"all\"")
         Optional<String> getType();
 
         @Config("pattern")
@@ -40,6 +40,14 @@ public class MaskFilterPlugin implements FilterPlugin {
         @Config("length")
         @ConfigDefault("null")
         Optional<Integer> getLength();
+
+        @Config("start")
+        @ConfigDefault("null")
+        Optional<Integer> getStart();
+
+        @Config("end")
+        @ConfigDefault("null")
+        Optional<Integer> getEnd();
 
         @Config("paths")
         @ConfigDefault("null")
