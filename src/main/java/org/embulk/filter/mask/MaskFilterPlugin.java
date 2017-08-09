@@ -33,9 +33,21 @@ public class MaskFilterPlugin implements FilterPlugin {
         @ConfigDefault("\"all\"")
         Optional<String> getType();
 
+        @Config("pattern")
+        @ConfigDefault("\"all\"")
+        Optional<String> getPattern();
+
         @Config("length")
         @ConfigDefault("null")
         Optional<Integer> getLength();
+
+        @Config("start")
+        @ConfigDefault("null")
+        Optional<Integer> getStart();
+
+        @Config("end")
+        @ConfigDefault("null")
+        Optional<Integer> getEnd();
 
         @Config("paths")
         @ConfigDefault("null")

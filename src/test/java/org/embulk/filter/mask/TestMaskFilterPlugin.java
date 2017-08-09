@@ -263,7 +263,9 @@ public class TestMaskFilterPlugin {
                 "  - { name: _c0}\n" +
                 "  - { name: _c1, paths: [{key: $.root.key1}]}\n" +
                 "  - { name: _c2, paths: [{key: $.root.key3, length: 2}, {key: $.root.key4, type: all}]}\n" +
-                "  - { name: _c3, paths: [{key: $.root.key1}, {key: $.root.key3.key7, type: email, length: 3}]}\n";
+                "  - { name: _c3, paths: [{key: $.root.key1}, {key: $.root.key3.key7, type: email, length: 3}]}\n" +
+                "  - { name: _c4, paths: [{key: $.root.key1, type: regex, pattern: \"[0-9]\"}]}\n" +
+                "  - { name: _c5, paths: [{key: $.root.key1, type: substring, start: 2, end: 4, length: 5}]}\n";
 
         ConfigSource config = getConfigFromYaml(configYaml);
 
@@ -272,6 +274,8 @@ public class TestMaskFilterPlugin {
                 .add("_c1", JSON)
                 .add("_c2", JSON)
                 .add("_c3", JSON)
+                .add("_c4", JSON)
+                .add("_c5", JSON)
                 .build();
 
         final MaskFilterPlugin maskFilterPlugin = new MaskFilterPlugin();
@@ -298,6 +302,8 @@ public class TestMaskFilterPlugin {
                             jsonValue,
                             jsonValue,
                             jsonValue,
+                            jsonValue,
+                            jsonValue,
                             jsonValue
                     )) {
                         pageOutput.add(page);
@@ -309,11 +315,13 @@ public class TestMaskFilterPlugin {
                 assertEquals(1, records.size());
                 Object[] record = records.get(0);
 
-                assertEquals(4, record.length);
+                assertEquals(6, record.length);
                 assertEquals("{\"root\":{\"key1\":\"value1\",\"key2\":2,\"key3\":{\"key5\":\"value5\",\"key6\":[0,1,2,3,4],\"key7\":\"testme@example.com\"},\"key4\":[0,1,2,3,4]}}", record[0].toString());
                 assertEquals("{\"root\":{\"key1\":\"******\",\"key2\":2,\"key3\":{\"key5\":\"value5\",\"key6\":[0,1,2,3,4],\"key7\":\"testme@example.com\"},\"key4\":[0,1,2,3,4]}}", record[1].toString());
                 assertEquals("{\"root\":{\"key1\":\"value1\",\"key2\":2,\"key3\":\"**\",\"key4\":\"***********\"}}", record[2].toString());
                 assertEquals("{\"root\":{\"key1\":\"******\",\"key2\":2,\"key3\":{\"key5\":\"value5\",\"key6\":[0,1,2,3,4],\"key7\":\"***@example.com\"},\"key4\":[0,1,2,3,4]}}", record[3].toString());
+                assertEquals("{\"root\":{\"key1\":\"value*\",\"key2\":2,\"key3\":{\"key5\":\"value5\",\"key6\":[0,1,2,3,4],\"key7\":\"testme@example.com\"},\"key4\":[0,1,2,3,4]}}", record[4].toString());
+                assertEquals("{\"root\":{\"key1\":\"va*****e1\",\"key2\":2,\"key3\":{\"key5\":\"value5\",\"key6\":[0,1,2,3,4],\"key7\":\"testme@example.com\"},\"key4\":[0,1,2,3,4]}}", record[5].toString());
             }
         });
     }
@@ -369,6 +377,128 @@ public class TestMaskFilterPlugin {
                 assertEquals(getMaskedCharacters(email1), record[2]);
                 assertEquals(getMaskedCharacters(email1), record[3]);
                 assertEquals(email1, record[4]);
+            }
+        });
+    }
+
+    @Test
+    public void testRegexMaskType() {
+        String configYaml = "" +
+                "type: mask\n" +
+                "columns:\n" +
+                "  - { name: _c1, type: regex, pattern: \"abc\" }\n" +
+                "  - { name: _c2, type: regex, pattern: \"(abc)\" }\n" +
+                "  - { name: _c3, type: regex, pattern: \"[0-9]+\" }\n" +
+                "  - { name: _c4, type: regex, pattern: \"[0-9]\" }\n";
+
+        ConfigSource config = getConfigFromYaml(configYaml);
+
+        final Schema inputSchema = Schema.builder()
+                .add("_c0", STRING)
+                .add("_c1", STRING)
+                .add("_c2", STRING)
+                .add("_c3", STRING)
+                .add("_c4", STRING)
+                .build();
+
+        final MaskFilterPlugin maskFilterPlugin = new MaskFilterPlugin();
+        maskFilterPlugin.transaction(config, inputSchema, new Control() {
+            @Override
+            public void run(TaskSource taskSource, Schema outputSchema) {
+                final String c0ColumnValue = "_c0_abcdefghi01234";
+                final String c1ColumnValue = "_c1_abcdefghi01234";
+                final String c2ColumnValue = "_c2_abcdefghi01234";
+                final String c3ColumnValue = "_c3_abcdefghi01234";
+                final String c4ColumnValue = "_c4_abcdefghi01234";
+
+                MockPageOutput mockPageOutput = new MockPageOutput();
+                try (PageOutput pageOutput = maskFilterPlugin.open(taskSource, inputSchema, outputSchema, mockPageOutput)) {
+                    for (Page page : PageTestUtils.buildPage(runtime.getBufferAllocator(), inputSchema,
+                            c0ColumnValue,
+                            c1ColumnValue,
+                            c2ColumnValue,
+                            c3ColumnValue,
+                            c4ColumnValue
+                    )) {
+                        pageOutput.add(page);
+                    }
+                    pageOutput.finish();
+                }
+                List<Object[]> records = Pages.toObjects(outputSchema, mockPageOutput.pages);
+
+                assertEquals(1, records.size());
+                Object[] record = records.get(0);
+
+                assertEquals(5, record.length);
+                assertEquals("_c0_abcdefghi01234", record[0]);
+                assertEquals("_c1_*defghi01234", record[1]);
+                assertEquals("_c2_*defghi01234", record[2]);
+                assertEquals("_c*_abcdefghi*", record[3]);
+                assertEquals("_c*_abcdefghi*****", record[4]);
+            }
+        });
+    }
+
+    @Test
+    public void testSubstringMaskType() {
+        String configYaml = "" +
+                "type: mask\n" +
+                "columns:\n" +
+                "  - { name: _c0, type: substring }\n" +
+                "  - { name: _c1, type: substring, start: 2, end: 5 }\n" +
+                "  - { name: _c2, type: substring, start: 6 }\n" +
+                "  - { name: _c3, type: substring, end: 4 }\n" +
+                "  - { name: _c4, type: substring, start: 3, length: 5 }\n" +
+                "  - { name: _c5, type: substring, start: 3, end: 2, length: 5 }\n"; // invalid configuration
+
+                ConfigSource config = getConfigFromYaml(configYaml);
+
+        final Schema inputSchema = Schema.builder()
+                .add("_c0", STRING)
+                .add("_c1", STRING)
+                .add("_c2", STRING)
+                .add("_c3", STRING)
+                .add("_c4", STRING)
+                .add("_c5", STRING)
+                .build();
+
+        final MaskFilterPlugin maskFilterPlugin = new MaskFilterPlugin();
+        maskFilterPlugin.transaction(config, inputSchema, new Control() {
+            @Override
+            public void run(TaskSource taskSource, Schema outputSchema) {
+                final String c0ColumnValue = "_c0_abcdefghi01234";
+                final String c1ColumnValue = "_c1_abcdefghi01234";
+                final String c2ColumnValue = "_c2_abcdefghi01234";
+                final String c3ColumnValue = "_c3_abcdefghi01234";
+                final String c4ColumnValue = "_c4_abcdefghi01234";
+                final String c5ColumnValue = "_c5_abcdefghi01234";
+
+                MockPageOutput mockPageOutput = new MockPageOutput();
+                try (PageOutput pageOutput = maskFilterPlugin.open(taskSource, inputSchema, outputSchema, mockPageOutput)) {
+                    for (Page page : PageTestUtils.buildPage(runtime.getBufferAllocator(), inputSchema,
+                            c0ColumnValue,
+                            c1ColumnValue,
+                            c2ColumnValue,
+                            c3ColumnValue,
+                            c4ColumnValue,
+                            c5ColumnValue
+                    )) {
+                        pageOutput.add(page);
+                    }
+                    pageOutput.finish();
+                }
+                List<Object[]> records = Pages.toObjects(outputSchema, mockPageOutput.pages);
+
+                assertEquals(1, records.size());
+                Object[] record = records.get(0);
+
+                assertEquals(6, record.length);
+                assertEquals("******************", record[0]);
+                assertEquals("_c***bcdefghi01234", record[1]);
+                assertEquals("_c2_ab************", record[2]);
+                assertEquals("****abcdefghi01234", record[3]);
+                assertEquals("_c4*****", record[4]);
+                assertEquals("_c5_abcdefghi01234", record[5]);
             }
         });
     }

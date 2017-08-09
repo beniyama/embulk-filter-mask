@@ -122,8 +122,12 @@ public class MaskPageOutput implements PageOutput {
     private String maskAsString(String name, Object value) {
         MaskColumn maskColumn = maskColumnMap.get(name);
         String type = maskColumn.getType().get();
-        int maskLength = maskColumn.getLength().or(0);
-        return mask(value, type, maskLength);
+        String pattern = maskColumn.getPattern().or("");
+        Integer length = maskColumn.getLength().or(-1);
+        Integer start = maskColumn.getStart().or(-1);
+        Integer end = maskColumn.getEnd().or(-1);
+
+        return mask(type, value, pattern, length, start, end);
     }
 
     private Value maskAsJson(String name, Value value) {
@@ -134,10 +138,13 @@ public class MaskPageOutput implements PageOutput {
         for (Map<String, String> path : paths) {
             String key = path.get("key");
             String type = path.containsKey("type") ? path.get("type") : "all";
-            int maskLength = path.containsKey("length") ? Integer.parseInt(path.get("length")) : 0;
+            String pattern = path.containsKey("pattern") ? path.get("pattern") : "";
+            Integer length = path.containsKey("length") ? Integer.parseInt(path.get("length")) : -1;
+            Integer start = path.containsKey("start") ? Integer.parseInt(path.get("start")) : -1;
+            Integer end = path.containsKey("end") ? Integer.parseInt(path.get("end")) : -1;
             Object element = context.read(key);
             if (!key.equals("$") && element != null) {
-                String maskedValue = mask(element, type, maskLength);
+                String maskedValue = mask(type, element, pattern, length, start, end);
                 context.set(key, new TextNode(maskedValue).asText()).jsonString();
             }
         }
@@ -154,25 +161,61 @@ public class MaskPageOutput implements PageOutput {
         builder.close();
     }
 
-    private String mask(Object value, String type, Integer length) {
+    private String mask(String type, Object value, String pattern, Integer length, Integer start, Integer end) {
         String maskedValue;
         String nakedValue = value.toString();
-        if (type.equals("email")) {
-            if (length > 0) {
-                String maskPattern = StringUtils.repeat("*", length) + "@$1";
-                maskedValue = nakedValue.replaceFirst("^.+?@(.+)$", maskPattern);
-            } else {
-                maskedValue = nakedValue.replaceAll(".(?=[^@]*@)", "*");
-            }
+        if (type.equals("regex")) {
+            maskedValue = maskRegex(nakedValue, pattern);
+        } else if (type.equals("substring")) {
+            maskedValue = maskSubstring(nakedValue, start, end, length);
+        } else if (type.equals("email")) {
+            maskedValue = maskEmail(nakedValue, length);
         } else if (type.equals("all")) {
-            if (length > 0) {
-                maskedValue = StringUtils.repeat("*", length);
-            } else {
-                maskedValue = nakedValue.replaceAll(".", "*");
-            }
+            maskedValue = maskAll(nakedValue, length);
         } else {
             maskedValue = nakedValue;
         }
         return maskedValue;
+    }
+
+    private String maskAll(Object value, Integer length) {
+        String maskedValue;
+        String nakedValue = value.toString();
+        if (length > 0) {
+            maskedValue = StringUtils.repeat("*", length);
+        } else {
+            maskedValue = nakedValue.replaceAll(".", "*");
+        }
+        return maskedValue;
+    }
+
+    private String maskEmail(Object value, Integer length) {
+        String maskedValue;
+        String nakedValue = value.toString();
+        if (length > 0) {
+            String maskPattern = StringUtils.repeat("*", length) + "@$1";
+            maskedValue = nakedValue.replaceFirst("^.+?@(.+)$", maskPattern);
+        } else {
+            maskedValue = nakedValue.replaceAll(".(?=[^@]*@)", "*");
+        }
+        return maskedValue;
+    }
+
+    private String maskRegex(Object value, String pattern) {
+        String nakedValue = value.toString();
+        return nakedValue.replaceAll(pattern, "*");
+    }
+
+    private String maskSubstring(Object value, Integer start, Integer end, Integer length) {
+        String nakedValue = value.toString();
+
+        if (nakedValue.length() <= start || (0 <= end && (end - 1) <= start)) return nakedValue;
+
+        start = start < 0 ? 0 : start;
+        end = (end < 0 || nakedValue.length() <= end) ? nakedValue.length() : end;
+        int repeat = length > 0 ? length : end - start;
+
+        StringBuffer buffer = new StringBuffer(nakedValue);
+        return buffer.replace(start, end, StringUtils.repeat("*", repeat)).toString();
     }
 }
