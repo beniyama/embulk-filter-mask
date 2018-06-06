@@ -64,7 +64,7 @@ If you use `regex` and/or `substring` types,
 filters:
   - type: mask
     columns:
-      - { name: last_name, type: regex, pattern: "[a-z]"}
+      - { name: first_name, type: regex, pattern: "[a-z]"}
       - { name: contact, type: substring, start: 5, length: 5}
 ```
 
